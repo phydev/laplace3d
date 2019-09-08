@@ -6,7 +6,8 @@ module routines
 
   private
 
-  public :: ghost_update,&
+  public :: laplacian_calc,&
+            ghost_update,&
             domain_decomposition,&
             heaviside
 
@@ -19,6 +20,74 @@ module routines
   end type comm_t
 
   contains
+
+    subroutine laplacian_calc(v_local,V1,V2, border, diff, L1, L2)
+
+      implicit none
+
+      real(8), allocatable, intent(inout) :: v_local(:,:,:)
+      real(8), intent(in) :: V1, V2
+      real(8), allocatable :: v_new(:,:,:)
+      integer, intent(in) :: L1, L2, border(1:3,0:1)
+      real(8), intent(out) :: diff
+      real(8) :: a
+      integer :: i, j, k
+
+
+      ALLOCATE(v_new(border(1,0):border(1,1), border(2,0):border(2,1), border(3,0):border(3,1) ) )
+      
+      a = 0.166666666667
+      diff = 0.d0
+    
+      do i= border(1,0), border(1,1)
+          do j= border(2,0), border(2,1)
+              do k= border(3,0), border(3,1)
+                  
+
+               if(abs(i)>L1 .or. abs(j)> L1 .or. abs(k)> L1) then
+                    v_new(i,j,k) = a*( v_local(i-1,j,k) + v_local(i+1,j,k) + &
+                                       v_local(i,j-1,k) + v_local(i,j+1,k) + &
+                                       v_local(i,j,k-1) + v_local(i,j,k+1) )
+
+               else if(abs(i).le.L1 .or. abs(j).le. L1 .or. abs(k) .le. L1) then
+                  ! assuring the boundary conditions
+                  v_new(i,j,k) = V1
+            
+               end if
+
+               ! assuring the boundary conditions
+               if(i.le. -L2  ) then
+                  v_new(i,j,k) = V2
+               elseif(i .ge. L2 -1 ) then
+                  v_new(i,j,k) = V2
+               elseif(j .le.- L2 ) then
+                  v_new(i,j,k) = V2
+               elseif(j .ge. L2 -1 ) then
+                  v_new(i,j,k) = V2
+               elseif(k .le. -L2 ) then
+                  v_new(i,j,k) = V2
+               elseif(k .ge. L2 -1 ) then
+                  v_new(i,j,k) = V2
+               end if
+
+
+              end do
+           end do
+        end do
+        
+        diff = 0.d0
+        do i= border(1,0), border(1,1)
+           do j= border(2,0), border(2,1)
+              do k= border(3,0), border(3,1)
+                 diff = diff +  abs((v_new(i,j,k) - v_local(i,j,k) ))/abs(v_local(i,j,k))
+              end do
+           end do
+        end do
+
+        v_local(border(1,0):border(1,1), border(2,0):border(2,1), border(3,0):border(3,1)) = v_new(border(1,0):border(1,1), border(2,0):border(2,1), border(3,0):border(3,1))
+        
+        DEALLOCATE(v_new)
+    end subroutine laplacian_calc
 
     subroutine ghost_update(v_local, border, src, dest, n_src, n_dest, src_dir, dest_dir, comm3d, comm)
 
